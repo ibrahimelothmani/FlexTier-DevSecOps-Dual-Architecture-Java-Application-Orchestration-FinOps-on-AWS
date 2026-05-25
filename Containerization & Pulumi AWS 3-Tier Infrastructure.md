@@ -36,25 +36,40 @@ We will organize the changes into two main categories:
 
 ```mermaid
 graph TD
+    DevOps[DevOps Engineer] -->|Writes Pulumi IaC| GitPush[Push Code]
+    GitPush -->|Trigger Pipeline| GitHub[GitHub CI/CD Pipeline]
+    GitHub -->|Maven Build & Trivy Scan| DockerBuild[Dockerize Tomcat App]
+    DockerBuild -->|Deploy Container| ECR[Amazon ECR Registry]
+    
     Client[Web Browser / Client] -->|HTTP/HTTPS| ALB[Application Load Balancer]
+    
     subgraph VPC [AWS VPC - 10.0.0.0/16]
+        IGW[Internet Gateway]
+        
+        subgraph Routing [Routing Tables]
+            PubRT[Public Route Table: 0.0.0.0/0 -> IGW]
+            PrivRT[Private Route Tables: 0.0.0.0/0 -> NAT]
+        end
+
         subgraph PublicSubnets [Public Subnets]
             ALB
             NAT[NAT Gateway]
         end
+        
         subgraph PrivateSubnets [Private App Subnets]
-            ECS[ECS Fargate Tasks]
+            ECS[ECS Fargate Tasks: Java Spring Boot App]
         end
+        
         subgraph IsolatedSubnets [Isolated Data Subnets]
-            RDS[(Amazon RDS MySQL)]
-            Redis[(ElastiCache Redis)]
+            RDS[(Amazon RDS MySQL Multi-AZ)]
+            Redis[(Amazon ElastiCache Redis)]
         end
     end
+    
+    ECR -->|Deploy Task| ECS
     Secrets[AWS Secrets Manager] -.->|Secure Credentials| ECS
     KMS[AWS KMS Key] -.->|Encryption| RDS
     KMS -.->|Encryption| Secrets
-    GitHub[GitHub Actions / CI/CD] -->|Push Docker Image| ECR[Amazon ECR Registry]
-    ECR -->|Deploy Task| ECS
 ```
 
 ---
