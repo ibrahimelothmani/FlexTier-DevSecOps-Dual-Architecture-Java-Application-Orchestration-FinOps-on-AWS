@@ -1,0 +1,101 @@
+---
+- name: Standardize Java Tomcat App Infrastructure
+  hosts: app_servers
+  become: yes
+  vars:
+    tomcat_version: "9.0.86"
+    tomcat_install_dir: "/opt/tomcat"
+    tomcat_download_url: "https://archive.apache.org/dist/tomcat/tomcat-9/v{{ tomcat_version }}/bin/apache-tomcat-{{ tomcat_version }}.tar.gz"
+
+  tasks:
+    - name: Ensure Java JRE 8 is installed
+      apt:
+        name: openjdk-8-jre-headless
+        state: present
+        update_cache: yes
+
+    - name: Create secure system user group for Tomcat
+      group:
+        name: tomcat
+        state: present
+
+    - name: Create system user for running Tomcat securely
+      user:
+        name: tomcat
+        group: tomcat
+        home: "{{ tomcat_install_dir }}"
+        shell: /bin/false
+        state: present
+
+    - name: Download Apache Tomcat tarball
+      get_url:
+        url: "{{ tomcat_download_url }}"
+        dest: "/tmp/apache-tomcat-{{ tomcat_version }}.tar.gz"
+        mode: '0644'
+
+    - name: Ensure target installation folder exists
+      file:
+        path: "{{ tomcat_install_dir }}"
+        state: directory
+        owner: tomcat
+        group: tomcat
+        mode: '0755'
+
+    - name: Extract Tomcat package
+      unarchive:
+        src: "/tmp/apache-tomcat-{{ tomcat_version }}.tar.gz"
+        dest: "{{ tomcat_install_dir }}"
+        remote_src: yes
+        extra_opts: [--strip-components=1]
+        owner: tomcat
+        group: tomcat
+
+    - name: Configure standard folder permissions for secure operations
+      file:
+        path: "{{ item.path }}"
+        owner: tomcat
+        group: tomcat
+        mode: "{{ item.mode }}"
+        recurse: yes
+      loop:
+        - { path: "{{ tomcat_install_dir }}/conf", mode: "g+r,o-rwx" }
+        - { path: "{{ tomcat_install_dir }}/webapps", mode: "g+w,o-rwx" }
+        - { path: "{{ tomcat_install_dir }}/work", mode: "g+w,o-rwx" }
+        - { path: "{{ tomcat_install_dir }}/temp", mode: "g+w,o-rwx" }
+        - { path: "{{ tomcat_install_dir }}/logs", mode: "g+w,o-rwx" }
+
+    - name: Deploy Systemd unit file for Tomcat service
+      copy:
+        dest: /etc/systemd/system/tomcat.service
+        content: |
+          [Unit]
+          Description=Apache Tomcat Web Application Container
+          After=network.target
+
+          [Service]
+          Type=forking
+
+          User=tomcat
+          Group=tomcat
+
+          Environment="JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64"
+          Environment="CATALINA_PID={{ tomcat_install_dir }}/temp/tomcat.pid"
+          Environment="CATALINA_HOME={{ tomcat_install_dir }}"
+          Environment="CATALINA_BASE={{ tomcat_install_dir }}"
+          Environment="CATALINA_OPTS=-Xms512M -Xmx1024M -server -XX:+UseParallelGC"
+
+          ExecStart={{ tomcat_install_dir }}/bin/startup.sh
+          ExecStop={{ tomcat_install_dir }}/bin/shutdown.sh
+
+          [Install]
+          WantedBy=multi-user.target
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Reload systemd configuration and start Tomcat service
+      systemd:
+        name: tomcat
+        state: started
+        enabled: yes
+        daemon_reload: yes
