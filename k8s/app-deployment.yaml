@@ -5,8 +5,8 @@ metadata:
   namespace: default
 type: Opaque
 stringData:
-  username: admin
-  password: AdminPasswordPlaceholder123
+  username: DB_USERNAME_PLACEHOLDER
+  password: DB_PASSWORD_PLACEHOLDER
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -25,15 +25,6 @@ spec:
       labels:
         app: java-app
       annotations:
-        # Sidecar Injection for HashiCorp Vault Credentials
-        vault.hashicorp.com/agent-inject: "true"
-        vault.hashicorp.com/role: "java-app-role"
-        vault.hashicorp.com/agent-inject-secret-database: "secret/data/mysql"
-        vault.hashicorp.com/agent-inject-template-database: |
-          {{- with secret "secret/data/mysql" -}}
-          export DB_USERNAME="{{ .Data.data.username }}"
-          export DB_PASSWORD="{{ .Data.data.password }}"
-          {{- end -}}
         # Telemetry Scraping for Prometheus Setup
         prometheus.io/scrape: "true"
         prometheus.io/port: "8080"
@@ -47,7 +38,7 @@ spec:
               name: http
           env:
             - name: DB_HOST
-              value: "mysql-service.default.svc.cluster.local"
+              value: "DB_HOST_PLACEHOLDER"
             - name: DB_PORT
               value: "3306"
             - name: DB_NAME
@@ -97,26 +88,4 @@ spec:
       port: 80
       targetPort: 8080
       name: http
-  type: ClusterIP
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: java-app-ingress
-  namespace: default
-  annotations:
-    kubernetes.io/ingress.class: nginx
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
-spec:
-  rules:
-    - host: app.dptweb.local
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: java-app-service
-                port:
-                  number: 80
+  type: LoadBalancer
