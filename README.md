@@ -1,6 +1,6 @@
-# ☕ End-to-End Java Application Deployment with Modern DevSecOps & Kubernetes Orchestration
+# ☕ FlexTier-DevSecOps: Dual-Architecture Java Application Orchestration & FinOps on AWS
 
-Welcome to the **End-to-End Java Application Deployment & DevSecOps Platform** repository. This project demonstrates the transition of a legacy-style Java Spring Boot application (packaged as a WAR) from manual deployment to a containerized, orchestrated, secure, and monitored cloud environment using modern DevSecOps standards.
+Welcome to **FlexTier-DevSecOps** — a high-efficiency deployment and orchestration repository for Java Spring Boot applications. This project showcases how to transition a legacy Java servlet (packaged as a WAR) into modern containerized infrastructures using two distinct pathways: a cost-optimized, single-node K3s cluster managed via Ansible, and an enterprise-grade, Multi-AZ ECS Fargate layout.
 
 ---
 
