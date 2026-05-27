@@ -1,101 +1,71 @@
 ---
-- name: Standardize Java Tomcat App Infrastructure
-  hosts: app_servers
+- name: Bootstrap K3s Single-Node Cluster
+  hosts: all
   become: yes
-  vars:
-    tomcat_version: "9.0.86"
-    tomcat_install_dir: "/opt/tomcat"
-    tomcat_download_url: "https://archive.apache.org/dist/tomcat/tomcat-9/v{{ tomcat_version }}/bin/apache-tomcat-{{ tomcat_version }}.tar.gz"
+  gather_facts: yes
 
   tasks:
-    - name: Ensure Java JRE 8 is installed
+    - name: Wait for target host to become reachable
+      wait_for_connection:
+        delay: 5
+        timeout: 300
+
+    - name: Install system prerequisites
       apt:
-        name: openjdk-8-jre-headless
+        name:
+          - curl
+          - ca-certificates
+          - apt-transport-https
         state: present
         update_cache: yes
 
-    - name: Create secure system user group for Tomcat
-      group:
-        name: tomcat
-        state: present
+    - name: Check if K3s is already installed
+      stat:
+        path: /usr/local/bin/k3s
+      register: k3s_bin
 
-    - name: Create system user for running Tomcat securely
-      user:
-        name: tomcat
-        group: tomcat
-        home: "{{ tomcat_install_dir }}"
-        shell: /bin/false
-        state: present
+    - name: Download and install K3s
+      shell: "curl -sfL https://get.k3s.io | sh -"
+      environment:
+        INSTALL_K3S_EXEC: "--write-kubeconfig-mode 644 --disable traefik"
+      when: not k3s_bin.stat.exists
 
-    - name: Download Apache Tomcat tarball
-      get_url:
-        url: "{{ tomcat_download_url }}"
-        dest: "/tmp/apache-tomcat-{{ tomcat_version }}.tar.gz"
-        mode: '0644'
+    - name: Wait for K3s node to be ready
+      shell: "/usr/local/bin/kubectl get nodes"
+      register: nodes_status
+      until: '" Ready " in nodes_status.stdout'
+      retries: 10
+      delay: 5
 
-    - name: Ensure target installation folder exists
+    - name: Create .kube directory for ubuntu user
       file:
-        path: "{{ tomcat_install_dir }}"
+        path: /home/ubuntu/.kube
         state: directory
-        owner: tomcat
-        group: tomcat
-        mode: '0755'
+        owner: ubuntu
+        group: ubuntu
+        mode: '0700'
 
-    - name: Extract Tomcat package
-      unarchive:
-        src: "/tmp/apache-tomcat-{{ tomcat_version }}.tar.gz"
-        dest: "{{ tomcat_install_dir }}"
-        remote_src: yes
-        extra_opts: [--strip-components=1]
-        owner: tomcat
-        group: tomcat
-
-    - name: Configure standard folder permissions for secure operations
-      file:
-        path: "{{ item.path }}"
-        owner: tomcat
-        group: tomcat
-        mode: "{{ item.mode }}"
-        recurse: yes
-      loop:
-        - { path: "{{ tomcat_install_dir }}/conf", mode: "g+r,o-rwx" }
-        - { path: "{{ tomcat_install_dir }}/webapps", mode: "g+w,o-rwx" }
-        - { path: "{{ tomcat_install_dir }}/work", mode: "g+w,o-rwx" }
-        - { path: "{{ tomcat_install_dir }}/temp", mode: "g+w,o-rwx" }
-        - { path: "{{ tomcat_install_dir }}/logs", mode: "g+w,o-rwx" }
-
-    - name: Deploy Systemd unit file for Tomcat service
+    - name: Copy kubeconfig to ubuntu user home
       copy:
-        dest: /etc/systemd/system/tomcat.service
-        content: |
-          [Unit]
-          Description=Apache Tomcat Web Application Container
-          After=network.target
+        src: /etc/rancher/k3s/k3s.yaml
+        dest: /home/ubuntu/.kube/config
+        remote_src: yes
+        owner: ubuntu
+        group: ubuntu
+        mode: '0600'
 
-          [Service]
-          Type=forking
+    - name: Configure kubeconfig with public IP address
+      replace:
+        path: /home/ubuntu/.kube/config
+        regexp: '127.0.0.1'
+        replace: "{{ ansible_host }}"
 
-          User=tomcat
-          Group=tomcat
+    - name: Verify K3s installation and access
+      become: no
+      command: kubectl get nodes
+      register: k3s_check
+      changed_when: false
 
-          Environment="JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64"
-          Environment="CATALINA_PID={{ tomcat_install_dir }}/temp/tomcat.pid"
-          Environment="CATALINA_HOME={{ tomcat_install_dir }}"
-          Environment="CATALINA_BASE={{ tomcat_install_dir }}"
-          Environment="CATALINA_OPTS=-Xms512M -Xmx1024M -server -XX:+UseParallelGC"
-
-          ExecStart={{ tomcat_install_dir }}/bin/startup.sh
-          ExecStop={{ tomcat_install_dir }}/bin/shutdown.sh
-
-          [Install]
-          WantedBy=multi-user.target
-        owner: root
-        group: root
-        mode: '0644'
-
-    - name: Reload systemd configuration and start Tomcat service
-      systemd:
-        name: tomcat
-        state: started
-        enabled: yes
-        daemon_reload: yes
+    - name: Show cluster status
+      debug:
+        var: k3s_check.stdout_lines
