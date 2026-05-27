@@ -10,36 +10,19 @@ To support different operational budgets, scaling requirements, and environment 
 
 ---
 
-### 🟢 Option A: Cost-Optimized K3s DevSecOps Architecture (FinOps Tailored)
+### Cost-Optimized K3s DevSecOps Architecture (FinOps Tailored)
 *Recommended for Dev/Test, Staging, or high-efficiency workloads ($36.30/mo).*
 
 Our primary cost-optimized deployment architecture collapses container orchestration onto a single robust EC2 host running **K3s (lightweight Kubernetes)**. By placing the K3s host in a public subnet with native Layer 4 load balancing and routing, we completely eliminate costly Application Load Balancers (ALBs) and NAT Gateways. The database is securely isolated inside a private subnet.
 
 ![Cost-Optimized K3s Architecture](./k3s_optimized_architecture.png)
 
-#### 🌟 Key Architecture Pillars (Option A):
+#### 🌟 Key Architecture Pillars:
 1. **Lightweight Orchestration:** Declarative pod deployment (3 replicas for high availability at the application tier) using a minimal K3s footprint, saving host resource overhead.
 2. **Infrastructure-as-Code & CM:** Automatic server provisioning and secure dependency configuration managed continuously using **Ansible**.
 3. **Secret Injection Protection:** Real-time secret and API-key retrieval at runtime using **HashiCorp Vault**, avoiding plain-text secrets in git.
 4. **Comprehensive Telemetry:** Native JVM and container-level monitoring via Prometheus scraping, with visually rich tracking dashboards in Grafana.
 5. **FinOps Cost Optimization:** Achieves a massive **84.7% cost reduction** ($36.30/mo vs. $237.76/mo) compared to standard enterprise models by shedding redundant NAT and ALB costs.
-
----
-
-### 🔵 Option B: High-Availability Enterprise Multi-Tier AWS Architecture
-*Recommended for Enterprise-grade production workloads requiring absolute Multi-AZ redundancy ($237.76/mo).*
-
-The enterprise design distributes workloads across multiple Availability Zones to ensure zero downtime and strict network boundary segmentation. Traffic enters through an Internet-facing Application Load Balancer, routing to containerized application tasks running on AWS ECS Fargate, while outbound requests leverage dedicated NAT Gateways.
-
-![Enterprise AWS 3-Tier Architecture](./new_architecture.png)
-
-#### 🌟 Key Architecture Pillars (Option B):
-1. **Multi-AZ Application Reliability:** Automated container scheduling and traffic balancing across multiple Availability Zones behind an AWS Elastic Application Load Balancer.
-2. **Network Routing Segmentation:** Explicit **Public Route Tables** (for internet ingress) and **Private Route Tables** (routing application and data subnets securely through NAT Gateways).
-3. **Hardened Database Tier:** AWS RDS MySQL Multi-AZ and ElastiCache Redis deployments locked within isolated, non-routable subnets.
-4. **DevOps Pipeline Automation:** Direct CI/CD integration triggered by code push, incorporating security scanning (Trivy), automated Maven compiles, and multi-tagged ECR image delivery.
-
----
 
 ## ☕ Java Application Profile & Security Audit
 
